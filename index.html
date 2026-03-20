@@ -238,34 +238,120 @@
         return out;
       }
 
+      function coordsToGeoPayload(pos, fixHint) {
+        const c = pos.coords;
+        return {
+          latitude: c.latitude,
+          longitude: c.longitude,
+          accuracyM: c.accuracy,
+          altitude: c.altitude,
+          altitudeAccuracyM: c.altitudeAccuracy,
+          heading: c.heading,
+          speed: c.speed,
+          timestamp: pos.timestamp,
+          fixHint: fixHint || "",
+        };
+      }
+
+      /**
+       * Включить чип GPS в настройках Android/iOS со страницы нельзя (нет Web API).
+       * На смартфонах: enableHighAccuracy + watchPosition — даём модулю время,
+       * выбираем чтение с минимальной accuracy (чаще это именно GPS, а не только сеть).
+       */
       function readGeo() {
         return new Promise(function (resolve, reject) {
           if (!navigator.geolocation) {
             reject(new Error("Геолокация в этом браузере не поддерживается"));
             return;
           }
-          navigator.geolocation.getCurrentPosition(
+          const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(
+            navigator.userAgent || ""
+          );
+          const highAcc = { enableHighAccuracy: true, maximumAge: 0 };
+
+          if (!mobile) {
+            navigator.geolocation.getCurrentPosition(
+              function (pos) {
+                resolve(coordsToGeoPayload(pos, "desktop:getCurrentPosition"));
+              },
+              function (err) {
+                reject(new Error(formatGeolocationError(err)));
+              },
+              Object.assign({ timeout: 28000 }, highAcc)
+            );
+            return;
+          }
+
+          let best = null;
+          let watchId = null;
+          let finished = false;
+          const t0 = Date.now();
+          const HARD_MS = 42000;
+          const GOOD_ACC_M = 35;
+          const MIN_WAIT_MS = 2200;
+
+          function cleanup() {
+            if (watchId != null) {
+              navigator.geolocation.clearWatch(watchId);
+              watchId = null;
+            }
+          }
+
+          function finishOk(pos, hint) {
+            if (finished) return;
+            finished = true;
+            cleanup();
+            clearTimeout(hardTimer);
+            resolve(coordsToGeoPayload(pos, hint));
+          }
+
+          function finishErr(err) {
+            if (finished) return;
+            finished = true;
+            cleanup();
+            clearTimeout(hardTimer);
+            reject(new Error(formatGeolocationError(err)));
+          }
+
+          const hardTimer = setTimeout(function () {
+            if (finished) return;
+            if (best) {
+              finishOk(best, "mobile:watchPosition-best");
+              return;
+            }
+            navigator.geolocation.getCurrentPosition(
+              function (pos) {
+                if (finished) return;
+                finished = true;
+                cleanup();
+                clearTimeout(hardTimer);
+                resolve(
+                  coordsToGeoPayload(pos, "mobile:getCurrentPosition-fallback")
+                );
+              },
+              function (err) {
+                finishErr(err);
+              },
+              Object.assign({ timeout: 16000 }, highAcc)
+            );
+          }, HARD_MS);
+
+          watchId = navigator.geolocation.watchPosition(
             function (pos) {
-              const c = pos.coords;
-              resolve({
-                latitude: c.latitude,
-                longitude: c.longitude,
-                accuracyM: c.accuracy,
-                altitude: c.altitude,
-                altitudeAccuracyM: c.altitudeAccuracy,
-                heading: c.heading,
-                speed: c.speed,
-                timestamp: pos.timestamp,
-              });
+              if (finished) return;
+              const acc = pos.coords.accuracy;
+              if (!best || acc < best.coords.accuracy) {
+                best = pos;
+              }
+              const elapsed = Date.now() - t0;
+              if (acc <= GOOD_ACC_M && elapsed >= MIN_WAIT_MS) {
+                finishOk(pos, "mobile:watchPosition-high-accuracy");
+              }
             },
             function (err) {
-              reject(new Error(formatGeolocationError(err)));
+              finishErr(err);
             },
-            {
-              enableHighAccuracy: true,
-              maximumAge: 0,
-              timeout: 28000,
-            }
+            highAcc
           );
         });
       }

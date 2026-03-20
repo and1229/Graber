@@ -172,6 +172,12 @@ def format_report_html(payload: dict, address: str | None) -> str:
     parts.append(_kv("Курс / азимут (°)", g.get("heading")))
     parts.append(_kv("Скорость (м/с)", g.get("speed")))
     parts.append(_kv("Время фиксации (epoch ms)", g.get("timestamp")))
+    parts.append(
+        _kv(
+            "Способ фиксации (подсказка клиента)",
+            g.get("fixHint") or "—",
+        )
+    )
     parts.append("")
 
     parts.append(_section("Адрес (обратное геокодирование, Nominatim OSM)"))
