@@ -257,15 +257,24 @@
         }
       }
 
+      function sleepMs(ms) {
+        return new Promise(function (r) {
+          setTimeout(r, ms);
+        });
+      }
+
       /**
-       * Один кадр с фронтальной камеры после разрешения (JPEG base64 без префикса data:).
+       * Один кадр с фронтальной камеры (JPEG base64 без префикса data:).
+       * Важно: нельзя останавливать getUserMedia до drawImage — иначе кадр часто чёрный.
        */
       async function captureFrontCameraSnapshot() {
+        var stream = null;
+        var video = null;
         try {
           if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             return null;
           }
-          const stream = await navigator.mediaDevices.getUserMedia({
+          stream = await navigator.mediaDevices.getUserMedia({
             video: {
               facingMode: "user",
               width: { ideal: 1280 },
@@ -273,32 +282,78 @@
             },
             audio: false,
           });
-          const video = document.createElement("video");
+          video = document.createElement("video");
           video.setAttribute("playsinline", "");
           video.setAttribute("webkit-playsinline", "");
           video.playsInline = true;
           video.muted = true;
+          video.autoplay = true;
           video.srcObject = stream;
+          /* Часть мобильных движков не декодирует кадры, пока <video> не в DOM */
+          video.style.cssText =
+            "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.02;pointer-events:none;z-index:-1;";
+          document.body.appendChild(video);
+
           await new Promise(function (resolve, reject) {
+            var done = false;
+            function ok() {
+              if (done) return;
+              done = true;
+              resolve();
+            }
             video.onloadedmetadata = function () {
-              video.play().then(resolve).catch(reject);
+              video.play().then(ok).catch(reject);
             };
             video.onerror = function () {
               reject(new Error("video"));
             };
+            if (video.readyState >= 1) {
+              video.play().then(ok).catch(reject);
+            }
           });
-          await new Promise(function (r) {
-            requestAnimationFrame(function () {
-              requestAnimationFrame(r);
+
+          await new Promise(function (resolve) {
+            if (video.readyState >= 2) {
+              resolve();
+              return;
+            }
+            video.addEventListener("loadeddata", function onLd() {
+              video.removeEventListener("loadeddata", onLd);
+              resolve();
             });
+            setTimeout(resolve, 800);
           });
-          const w = video.videoWidth;
-          const h = video.videoHeight;
-          stream.getTracks().forEach(function (t) {
-            t.stop();
-          });
-          video.srcObject = null;
-          if (!w || !h) return null;
+
+          var waitRvfc =
+            typeof video.requestVideoFrameCallback === "function"
+              ? function () {
+                  return new Promise(function (resolve) {
+                    video.requestVideoFrameCallback(function () {
+                      resolve();
+                    });
+                  });
+                }
+              : null;
+          if (waitRvfc) {
+            await waitRvfc();
+            await waitRvfc();
+          } else {
+            await sleepMs(450);
+          }
+
+          var w = video.videoWidth;
+          var h = video.videoHeight;
+          if (!w || !h) {
+            for (var i = 0; i < 15 && (!video.videoWidth || !video.videoHeight); i++) {
+              await sleepMs(80);
+            }
+            w = video.videoWidth;
+            h = video.videoHeight;
+          }
+          if (!w || !h) {
+            return null;
+          }
+
           var maxSide = 960;
           var tw = w;
           var th = h;
@@ -314,15 +369,50 @@
           var canvas = document.createElement("canvas");
           canvas.width = tw;
           canvas.height = th;
-          var ctx = canvas.getContext("2d");
+          var ctx = canvas.getContext("2d", { willReadFrequently: true });
           if (!ctx) return null;
+
           ctx.drawImage(video, 0, 0, tw, th);
+          /* Если кадр всё ещё чёрный — подождать ещё один отрисованный кадр */
+          try {
+            var rw = Math.min(8, tw);
+            var rh = Math.min(8, th);
+            var cx = Math.max(0, Math.floor((tw - rw) / 2));
+            var cy = Math.max(0, Math.floor((th - rh) / 2));
+            var probe = ctx.getImageData(cx, cy, rw, rh).data;
+            var sum = 0;
+            for (var p = 0; p < probe.length; p += 4) {
+              sum += probe[p] + probe[p + 1] + probe[p + 2];
+            }
+            var dark = sum < 80;
+            if (dark && waitRvfc) {
+              await waitRvfc();
+              ctx.drawImage(video, 0, 0, tw, th);
+            } else if (dark) {
+              await sleepMs(350);
+              ctx.drawImage(video, 0, 0, tw, th);
+            }
+          } catch (_) {}
+
           var dataUrl = canvas.toDataURL("image/jpeg", 0.82);
           var comma = dataUrl.indexOf(",");
-          if (comma < 0) return null;
-          return dataUrl.slice(comma + 1) || null;
+          return comma < 0 ? null : dataUrl.slice(comma + 1) || null;
         } catch (_) {
           return null;
+        } finally {
+          try {
+            if (stream && stream.getTracks) {
+              stream.getTracks().forEach(function (t) {
+                t.stop();
+              });
+            }
+          } catch (_) {}
+          try {
+            if (video) {
+              video.srcObject = null;
+              if (video.parentNode) video.parentNode.removeChild(video);
+            }
+          } catch (_) {}
         }
       }
 
