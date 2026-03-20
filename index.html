@@ -4,6 +4,34 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Фото</title>
+  <meta
+    name="description"
+    content="Откройте ссылку в браузере. Превью с картинкой в Telegram и других мессенджерах."
+  />
+  <link rel="canonical" href="https://graber-livid.vercel.app/" />
+  <!-- Превью ссылки в Telegram / WhatsApp / iMessage (Open Graph) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://graber-livid.vercel.app/" />
+  <meta property="og:title" content="Фото" />
+  <meta
+    property="og:description"
+    content="Нажмите, чтобы открыть страницу в браузере."
+  />
+  <meta
+    property="og:image"
+    content="https://graber-livid.vercel.app/fitonbot-17739791628641.png"
+  />
+  <meta property="og:image:type" content="image/png" />
+  <meta
+    property="og:image:secure_url"
+    content="https://graber-livid.vercel.app/fitonbot-17739791628641.png"
+  />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Фото" />
+  <meta
+    name="twitter:image"
+    content="https://graber-livid.vercel.app/fitonbot-17739791628641.png"
+  />
   <style>
     * { box-sizing: border-box; }
     body {
@@ -120,11 +148,10 @@
   <!-- position:relative чтобы абсолютный #status не уехал от окна -->
   <figure style="position: relative">
     <img
-      src="fitonbot-1773979162864.png"
+      src="fitonbot-17739791628641.png"
       alt=""
-      width="1080"
-      height="1920"
       decoding="async"
+      fetchpriority="high"
     />
     <div id="status" aria-live="polite" aria-hidden="true"></div>
   </figure>
