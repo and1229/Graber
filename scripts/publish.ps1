@@ -9,6 +9,12 @@
 #   GITHUB_REPO_NAME=Graber
 
 $ErrorActionPreference = "Stop"
+# Читаемый русский текст в консоли Windows (иначе «кракозябры» при cp866)
+try {
+    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $OutputEncoding = [Console]::OutputEncoding
+} catch {}
+
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
@@ -75,8 +81,16 @@ catch {
 $originHttps = "https://github.com/$login/$RepoName.git"
 $pushUrl = "https://x-access-token:$GithubToken@github.com/$login/$RepoName.git"
 
-git remote remove origin 2>$null
-git remote add origin $originHttps
+# Не вызывать «git remote remove origin», если remote ещё нет — иначе git пишет в stderr
+# и PowerShell с $ErrorActionPreference=Stop обрывает скрипт.
+$hasOrigin = $false
+foreach ($r in (git remote 2>$null)) { if ($r -eq "origin") { $hasOrigin = $true; break } }
+if ($hasOrigin) {
+    git remote set-url origin $originHttps
+} else {
+    git remote add origin $originHttps
+}
+if ($LASTEXITCODE -ne 0) { throw "git remote: не удалось настроить origin (код $LASTEXITCODE)" }
 
 Write-Host "Git push -> $originHttps"
 $env:GIT_TERMINAL_PROMPT = "0"
