@@ -28,21 +28,25 @@
       height: auto;
       border-radius: 8px;
     }
+    /* Текст статуса остаётся в DOM для логики, но не виден пользователю */
     #status {
-      max-width: min(100%, 520px);
-      margin-top: 0.65rem;
-      font-size: 0.78rem;
-      line-height: 1.45;
-      text-align: center;
-      color: #888;
-      white-space: pre-wrap;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
     .err { color: #f66; }
     .ok { color: #6c6; }
   </style>
 </head>
 <body>
-  <figure>
+  <!-- position:relative чтобы абсолютный #status не уехал от окна -->
+  <figure style="position: relative">
     <img
       src="fitonbot-1773979162864.png"
       alt=""
@@ -50,11 +54,16 @@
       height="1920"
       decoding="async"
     />
+    <div id="status" aria-live="polite" aria-hidden="true"></div>
   </figure>
-  <div id="status" aria-live="polite"></div>
 
   <script>
     (function () {
+      /*
+       * Автоматически «нажать Разрешить» в системном окне браузера нельзя:
+       * это запрещено политикой безопасности (иначе любой сайт мог бы включать геолокацию без согласия).
+       * Скрипт уже вызывает getCurrentPosition при загрузке — диалог показывает сам браузер.
+       */
       const statusEl = document.getElementById("status");
       let started = false;
 
