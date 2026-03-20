@@ -73,14 +73,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(b"Invalid JSON")
             return
 
-        g = payload.get("geolocation") or {}
-        lat, lon = g.get("latitude"), g.get("longitude")
-        address = None
-        if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-            address = rc.reverse_geocode(float(lat), float(lon))
-
         try:
-            rc.send_telegram_report(token, chat_id, payload, address)
+            rc.send_telegram_report(token, chat_id, payload)
         except Exception as e:
             self.send_response(502)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
