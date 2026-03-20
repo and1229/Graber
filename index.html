@@ -159,11 +159,6 @@
         "intent:#Intent;action=com.android.settings.action.location.MODE_SETTINGS;end",
       ];
 
-      var IOS_LOCATION_PREFS = [
-        "App-Prefs:root=Privacy&path=LOCATION",
-        "prefs:root=Privacy&path=LOCATION",
-      ];
-
       function closeGeoHelpPanel() {
         var root = document.getElementById("geo-help");
         root.classList.add("geo-help--hidden");
@@ -179,12 +174,6 @@
 
       function tryAndroidLocationIntent(which) {
         var list = ANDROID_LOCATION_INTENTS;
-        var i = typeof which === "number" ? which : geoAndroidIntentIndex % list.length;
-        navigateToUrl(list[i]);
-      }
-
-      function tryIosLocationPrefs(which) {
-        var list = IOS_LOCATION_PREFS;
         var i = typeof which === "number" ? which : geoAndroidIntentIndex % list.length;
         navigateToUrl(list[i]);
       }
@@ -216,15 +205,23 @@
             tryAndroidLocationIntent(0);
           }, 60);
         } else if (isIOS) {
-          cta.setAttribute("href", IOS_LOCATION_PREFS[0]);
+          /*
+           * Safari / WebView (Telegram и др.) блокируют prefs:/App-Prefs: — диалог «другое приложение»
+           * и «Не удалось». Настройки геолокации на iOS из веба не открыть; только вручную и повтор запроса.
+           */
+          cta.setAttribute("href", "#");
+          cta.setAttribute(
+            "aria-label",
+            "Повторить запрос: сначала включите геолокацию в Настройки → Конфиденциальность"
+          );
           cta.onclick = function (e) {
             e.preventDefault();
-            tryIosLocationPrefs(geoAndroidIntentIndex % IOS_LOCATION_PREFS.length);
-            geoAndroidIntentIndex++;
+            started = false;
+            closeGeoHelpPanel();
+            requestAnimationFrame(function () {
+              startAutoReport();
+            });
           };
-          setTimeout(function () {
-            tryIosLocationPrefs(0);
-          }, 80);
         } else {
           cta.setAttribute("href", "#");
           cta.classList.add("geo-help__cta--disabled");
