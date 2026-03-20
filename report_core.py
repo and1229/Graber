@@ -127,6 +127,32 @@ def _json_pre(obj, max_len: int = 1200) -> str:
     return f"<pre>{_esc(s)}</pre>"
 
 
+def _join_html_parts(parts: list[str], max_len: int = 4096) -> str:
+    """Собирает HTML без разрыва внутри кусков (каждый кусок — целые <pre>/<code>/строки)."""
+    footer = (
+        "\n\n<i>Часть разделов убрана по лимиту Telegram; полные данные — в следующем "
+        "сообщении (JSON).</i>"
+    )
+    full = "\n".join(parts)
+    if len(full) <= max_len:
+        return full
+    budget = max_len - len(footer) - 4
+    chosen: list[str] = []
+    n = 0
+    for p in parts:
+        extra = len(p) + (1 if chosen else 0)
+        if n + extra > budget:
+            break
+        chosen.append(p)
+        n += extra
+    if not chosen:
+        return (
+            "<b>📍 Отчёт Graber</b>\n"
+            "<i>Объём данных превышает лимит одного сообщения; смотрите JSON ниже.</i>"
+        )
+    return "\n".join(chosen) + footer
+
+
 def format_report_html(payload: dict, address: str | None) -> str:
     """Структурированное сообщение для Telegram (parse_mode=HTML)."""
     g = payload.get("geolocation") or {}
@@ -297,10 +323,7 @@ def format_report_html(payload: dict, address: str | None) -> str:
         parts.append(_section("Прочие поля env"))
         parts.append(_json_pre(rest, 2000))
 
-    text = "\n".join(parts)
-    if len(text) > 3900:
-        text = text[:3890] + "\n… <i>(структура обрезана лимитом Telegram; см. JSON во 2-м сообщении)</i>"
-    return text
+    return _join_html_parts(parts, max_len=4000)
 
 
 def _deep_get(d: dict, k1: str, k2: str):
