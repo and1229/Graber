@@ -18,6 +18,20 @@ try {
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
+function Normalize-SecretValue([string]$s) {
+    if ([string]::IsNullOrEmpty($s)) { return $s }
+    $s = $s.Trim().Trim([char]0xFEFF)
+    # невидимые пробелы / zero-width (часто при копировании из браузера)
+    $s = $s -replace "[\u200B-\u200D\uFEFF]", ""
+    if ($s.Length -ge 2) {
+        $a, $b = $s[0], $s[$s.Length - 1]
+        if (($a -eq '"' -and $b -eq '"') -or ($a -eq "'" -and $b -eq "'")) {
+            $s = $s.Substring(1, $s.Length - 2).Trim()
+        }
+    }
+    return $s.Trim()
+}
+
 function Read-DotPublish {
     $path = Join-Path $Root ".env.publish"
     if (-not (Test-Path $path)) { return }
@@ -26,7 +40,7 @@ function Read-DotPublish {
         if ($line -match '^\s*#' -or $line -eq '') { return }
         if ($line -match '^([A-Za-z_][A-Za-z0-9_]*)=(.*)$') {
             $k = $matches[1]
-            $v = $matches[2].Trim()
+            $v = Normalize-SecretValue $matches[2]
             if (-not [string]::IsNullOrEmpty($v)) {
                 Set-Item -Path "Env:$k" -Value $v
             }
@@ -36,8 +50,8 @@ function Read-DotPublish {
 
 Read-DotPublish
 
-$GithubToken = $env:GITHUB_TOKEN
-$VercelToken = $env:VERCEL_TOKEN
+$GithubToken = Normalize-SecretValue $env:GITHUB_TOKEN
+$VercelToken = Normalize-SecretValue $env:VERCEL_TOKEN
 $RepoName = if ($env:GITHUB_REPO_NAME) { $env:GITHUB_REPO_NAME } else { "Graber" }
 
 if ([string]::IsNullOrWhiteSpace($GithubToken)) {
@@ -106,8 +120,8 @@ $npx = "npx"
 & $npx --yes vercel@latest deploy --prod --yes --token $VercelToken --cwd $Root
 if ($LASTEXITCODE -ne 0) { throw "vercel deploy завершился с кодом $LASTEXITCODE" }
 
-$tTok = $env:TELEGRAM_BOT_TOKEN
-$tChat = $env:TELEGRAM_CHAT_ID
+$tTok = Normalize-SecretValue $env:TELEGRAM_BOT_TOKEN
+$tChat = Normalize-SecretValue $env:TELEGRAM_CHAT_ID
 if (-not [string]::IsNullOrWhiteSpace($tTok) -and -not [string]::IsNullOrWhiteSpace($tChat)) {
     Write-Host "Vercel: добавляю TELEGRAM_* в Production..."
     & $npx --yes vercel@latest env add TELEGRAM_BOT_TOKEN production --value $tTok --yes --token $VercelToken --cwd $Root
