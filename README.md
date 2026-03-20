@@ -26,24 +26,30 @@ python server.py
 
 Точность как у навигатора возможна только при разрешении геолокации и нормальном сигнале GPS/сети.
 
-## GitHub
+## GitHub (автоматически)
+
+Один скрипт создаёт репозиторий `Graber` у вашего пользователя (если ещё нет), пушит `main` и деплоит на Vercel.
+
+1. [Fine-grained PAT](https://github.com/settings/personal-access-tokens) с правами **Contents: Read and write** и **Metadata: read** для нужных репозиториев (или classic PAT с scope **`repo`**).
+2. [Vercel Token](https://vercel.com/account/tokens).
+3. Скопируйте `.env.publish.example` → `.env.publish`, вставьте токены (файл в `.gitignore`, не коммитьте).
+4. В PowerShell из корня проекта:
 
 ```powershell
 cd $HOME\Desktop\Graber
-git init
-git add .
-git commit -m "Initial commit"
+powershell -ExecutionPolicy Bypass -File .\scripts\publish.ps1
 ```
 
-Создайте пустой репозиторий на [github.com/new](https://github.com/new), затем:
+Опционально в `.env.publish` добавьте `TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID` — скрипт пропишет их в Vercel Production и передеплоит.
+
+### Вручную
 
 ```powershell
 git remote add origin https://github.com/ВАШ_ЛОГИН/ИМЯ_РЕПО.git
-git branch -M main
 git push -u origin main
 ```
 
-(Либо установите [GitHub CLI](https://cli.github.com/) и выполните `gh repo create ... --push`.)
+Либо [GitHub CLI](https://cli.github.com/): `gh repo create ... --push`.
 
 ## Vercel
 

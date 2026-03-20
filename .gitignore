@@ -1,4 +1,5 @@
 .env
+.env.publish
 .venv/
 venv/
 __pycache__/
