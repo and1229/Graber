@@ -1,7 +1,8 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "api/report.py": {
-      "includeFiles": "report_core.py"
+      "excludeFiles": "{fitonbot-*.png,*.html,README.md,.env.example,.gitignore}"
     }
   }
 }
