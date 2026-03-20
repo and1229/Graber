@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "name": "graber",
   "functions": {
     "api/report.py": {
       "excludeFiles": "{fitonbot-*.png,*.html,README.md,.env.example,.gitignore}"
