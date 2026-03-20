@@ -61,4 +61,6 @@ git push -u origin main
    - `TELEGRAM_CHAT_ID`
 3. Задеплойте (Production). После деплоя откройте выданный URL — кнопка на главной странице снова бьёт в `/api/report` на Vercel.
 
+**Если в интерфейсе «Telegram … 404»:** у [Bot API](https://core.telegram.org/bots/api) ответ **404** почти всегда значит **неверный или отозванный** `TELEGRAM_BOT_TOKEN`. Задайте заново токен из [@BotFather](https://t.me/BotFather), сохраните в Vercel для **Production** и сделайте **Redeploy** (без redeploy старые переменные не подхватятся).
+
 Локальный запуск по-прежнему через `python server.py` с теми же переменными в окружении.

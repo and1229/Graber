@@ -22,8 +22,8 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-        chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+        token = rc.normalize_telegram_token(os.environ.get("TELEGRAM_BOT_TOKEN", ""))
+        chat_id = rc.normalize_telegram_chat_id(os.environ.get("TELEGRAM_CHAT_ID", ""))
         if not token or not chat_id:
             self.send_response(500)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
