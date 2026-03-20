@@ -235,11 +235,17 @@
             }
           },
           (err) => {
+            let msg = err.message || "";
+            if (err.code === 1) {
+              msg =
+                "Доступ запрещён. Включите геолокацию для этого сайта в настройках адресной строки (замок → разрешения), обновите страницу.";
+            } else if (err.code === 2) {
+              msg = "Местоположение недоступно (GPS/сеть).";
+            } else if (err.code === 3) {
+              msg = "Таймаут. Повторите попытку.";
+            }
             gpsOut.innerHTML =
-              '<span class="err">' +
-              err.message +
-              "</span>\nКод: " +
-              err.code;
+              '<span class="err">' + msg + "</span>" + (err.code ? "\nКод: " + err.code : "");
             btnGps.disabled = false;
           },
           { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }

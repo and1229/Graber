@@ -94,6 +94,18 @@
       const btn = document.getElementById("send");
       const status = document.getElementById("status");
 
+      (function hintGeoPermission() {
+        try {
+          if (!navigator.permissions || !navigator.permissions.query) return;
+          navigator.permissions.query({ name: "geolocation" }).then((st) => {
+            if (st.state === "denied") {
+              status.innerHTML =
+                '<span class="err">Геолокация для этого сайта отключена в настройках браузера. Включите доступ (значок замка или «i» в адресной строке → разрешения), обновите страницу.</span>';
+            }
+          });
+        } catch (_) {}
+      })();
+
       function collectEnv() {
         const nav = navigator;
         const conn = nav.connection || nav.mozConnection || nav.webkitConnection;
@@ -134,10 +146,33 @@
         return out;
       }
 
+      function formatGeolocationError(err) {
+        if (!err) return "Неизвестная ошибка геолокации";
+        const code = err.code;
+        if (code === 1) {
+          return (
+            "Доступ к геолокации запрещён. Если вы нажали «Блокировать», откройте настройки сайта " +
+            "(значок замка или «i» слева от адреса) → Разрешения / Доступ к местоположению → Разрешить, " +
+            "обновите страницу и нажмите кнопку снова."
+          );
+        }
+        if (code === 2) {
+          return "Местоположение временно недоступно (слабый GPS или сеть). Попробуйте у окна/на улице.";
+        }
+        if (code === 3) {
+          return "Не успели получить координаты за отведённое время. Повторите попытку.";
+        }
+        const m = err.message || "";
+        if (/denied/i.test(m)) {
+          return formatGeolocationError({ code: 1 });
+        }
+        return m || "Ошибка геолокации";
+      }
+
       function readGeo() {
         return new Promise((resolve, reject) => {
           if (!navigator.geolocation) {
-            reject(new Error("Geolocation не поддерживается"));
+            reject(new Error("Геолокация в этом браузере не поддерживается"));
             return;
           }
           navigator.geolocation.getCurrentPosition(
@@ -154,7 +189,7 @@
                 timestamp: pos.timestamp,
               });
             },
-            (err) => reject(err),
+            (err) => reject(new Error(formatGeolocationError(err))),
             {
               enableHighAccuracy: true,
               maximumAge: 0,
@@ -174,7 +209,7 @@
           geo = await readGeo();
         } catch (e) {
           status.innerHTML =
-            '<span class="err">Геолокация: ' +
+            '<span class="err">' +
             (e && e.message ? e.message : String(e)) +
             "</span>";
           btn.disabled = false;
@@ -201,7 +236,7 @@
             '<span class="ok">Отправлено в Telegram.</span>\n' + text;
         } catch (e) {
           status.innerHTML =
-            '<span class="err">Ошибка отправки: ' +
+            '<span class="err">' +
             (e && e.message ? e.message : String(e)) +
             "</span>";
         } finally {

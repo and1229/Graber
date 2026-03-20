@@ -86,7 +86,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(502)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.end_headers()
-            self.wfile.write(f"Telegram error: {e}".encode("utf-8", errors="replace"))
+            self.wfile.write(str(e).encode("utf-8", errors="replace"))
             return
 
         self.send_response(200)
