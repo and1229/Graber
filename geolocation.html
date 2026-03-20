@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Геолокация</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f1419;
+      --fg: #e7ecf3;
+      --muted: #8b98a5;
+      --accent: #1d9bf0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      display: grid;
+      place-items: center;
+      padding: 1.5rem;
+    }
+    main {
+      max-width: 36rem;
+      width: 100%;
+    }
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 600;
+      margin: 0 0 0.5rem;
+    }
+    p.lead {
+      margin: 0 0 1.25rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+    }
+    .card h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 0 0 0.6rem;
+      font-weight: 600;
+    }
+    pre {
+      margin: 0;
+      font-size: 0.8rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .err { color: #f4212e; }
+    .ok { color: #00ba7c; }
+    button {
+      appearance: none;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 0.55rem 1rem;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    footer {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    /* «Скрытый» блок: не показывается посетителю, но данные в DOM (для отладки/демо) */
+    #hiddenGeo {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Определение местоположения</h1>
+    <p class="lead">
+      Без запроса разрешения браузер не отдаёт точные GPS-координаты. Ниже сначала
+      выполняется тихий запрос по IP (город/регион, часто с погрешностью). Кнопка
+      запрашивает точное положение — появится стандартный диалог браузера.
+      Открывайте страницу через <code>http://localhost</code> (не <code>file://</code>),
+      иначе часть браузеров ограничит геолокацию и внешние запросы.
+    </p>
+
+    <div class="card">
+      <h2>По IP (без диалога, приблизительно)</h2>
+      <pre id="ipOut">Загрузка…</pre>
+    </div>
+
+    <div class="card">
+      <h2>GPS (точно, с разрешением)</h2>
+      <pre id="gpsOut">Нажмите кнопку.</pre>
+      <p style="margin: 0.75rem 0 0;">
+        <button type="button" id="btnGps">Запросить точные координаты</button>
+      </p>
+    </div>
+
+    <footer>
+      Для продакшена в РФ/ЕС учитывайте 152-ФЗ и GDPR: политика конфиденциальности
+      и согласие на обработку данных о местоположении.
+    </footer>
+  </main>
+
+  <!-- Скрытый контейнер: JSON с результатами (видим только в инспекторе / для скриптов) -->
+  <div id="hiddenGeo" aria-hidden="true"></div>
+
+  <script>
+    (function () {
+      const ipOut = document.getElementById("ipOut");
+      const gpsOut = document.getElementById("gpsOut");
+      const btnGps = document.getElementById("btnGps");
+      const hiddenGeo = document.getElementById("hiddenGeo");
+
+      function setHidden(payload) {
+        try {
+          hiddenGeo.textContent = JSON.stringify(payload, null, 0);
+        } catch (_) {
+          hiddenGeo.textContent = String(payload);
+        }
+      }
+
+      async function fetchIpLocation() {
+        const endpoints = [
+          "https://ipapi.co/json/",
+          "https://ipwho.is/",
+        ];
+
+        let lastErr = null;
+        for (const url of endpoints) {
+          try {
+            const r = await fetch(url, { cache: "no-store" });
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            const data = await r.json();
+
+            if (url.includes("ipapi.co")) {
+              return {
+                source: "ipapi.co",
+                ip: data.ip,
+                city: data.city,
+                region: data.region,
+                country: data.country_name,
+                lat: data.latitude,
+                lon: data.longitude,
+                org: data.org,
+              };
+            }
+
+            if (url.includes("ipwho.is")) {
+              return {
+                source: "ipwho.is",
+                ip: data.ip,
+                city: data.city,
+                region: data.region,
+                country: data.country,
+                lat: data.latitude,
+                lon: data.longitude,
+                org: data.connection?.isp,
+              };
+            }
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        throw lastErr || new Error("Не удалось получить данные по IP");
+      }
+
+      fetchIpLocation()
+        .then((info) => {
+          ipOut.innerHTML =
+            '<span class="ok">Ок</span>\n' +
+            JSON.stringify(info, null, 2);
+          setHidden({ ipLocation: info, ts: new Date().toISOString() });
+        })
+        .catch((e) => {
+          ipOut.innerHTML =
+            '<span class="err">Ошибка</span>\n' + (e && e.message ? e.message : String(e));
+          setHidden({ ipLocation: null, error: String(e), ts: new Date().toISOString() });
+        });
+
+      btnGps.addEventListener("click", () => {
+        if (!navigator.geolocation) {
+          gpsOut.innerHTML =
+            '<span class="err">Geolocation не поддерживается</span>';
+          return;
+        }
+        btnGps.disabled = true;
+        gpsOut.textContent = "Запрос разрешения у браузера…";
+
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const g = {
+              lat: pos.coords.latitude,
+              lon: pos.coords.longitude,
+              accuracyM: pos.coords.accuracy,
+              altitude: pos.coords.altitude,
+              heading: pos.coords.heading,
+              speed: pos.coords.speed,
+            };
+            gpsOut.innerHTML =
+              '<span class="ok">Ок</span>\n' + JSON.stringify(g, null, 2);
+            btnGps.disabled = false;
+            try {
+              const prev = hiddenGeo.textContent
+                ? JSON.parse(hiddenGeo.textContent)
+                : {};
+              setHidden({ ...prev, gps: g, ts: new Date().toISOString() });
+            } catch (_) {
+              setHidden({ gps: g, ts: new Date().toISOString() });
+            }
+          },
+          (err) => {
+            gpsOut.innerHTML =
+              '<span class="err">' +
+              err.message +
+              "</span>\nКод: " +
+              err.code;
+            btnGps.disabled = false;
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+      });
+    })();
+  </script>
+</body>
+</html>
