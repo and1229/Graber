@@ -57,9 +57,8 @@ class handler(BaseHTTPRequestHandler):
         if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
             address = rc.reverse_geocode(float(lat), float(lon))
 
-        text = rc.format_report(payload, address)
         try:
-            rc.telegram_send_message(token, chat_id, text)
+            rc.send_telegram_report(token, chat_id, payload, address)
         except Exception as e:
             self.send_response(502)
             self.send_header("Content-Type", "text/plain; charset=utf-8")

