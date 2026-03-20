@@ -43,73 +43,76 @@
     .err { color: #f66; }
     .ok { color: #6c6; }
 
+    /* Только нижняя полоска — фото на странице остаётся видимым */
     .geo-help {
       position: fixed;
-      inset: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
       z-index: 2147483647;
       display: flex;
-      align-items: center;
       justify-content: center;
-      padding: 1rem;
-      background: rgba(0, 0, 0, 0.88);
-      -webkit-backdrop-filter: blur(6px);
-      backdrop-filter: blur(6px);
+      align-items: flex-end;
+      padding: 0.45rem;
+      padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+      pointer-events: none;
     }
     .geo-help--hidden {
       display: none !important;
     }
-    .geo-help__box {
-      max-width: 22rem;
-      width: 100%;
-      padding: 1.25rem 1.35rem;
-      border-radius: 14px;
-      background: #2a2a2a;
-      color: #e8e8e8;
-      font-size: 0.9rem;
-      line-height: 1.5;
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-    }
-    .geo-help__box h2 {
-      margin: 0 0 0.65rem;
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: #fff;
-      line-height: 1.3;
-    }
-    .geo-help__box p {
-      margin: 0 0 0.75rem;
-    }
-    .geo-help__box p:last-of-type {
-      margin-bottom: 0;
-    }
-    .geo-help__actions {
+    .geo-help__bar {
+      pointer-events: auto;
       display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      margin-top: 1rem;
-    }
-    .geo-help__actions button {
+      align-items: stretch;
+      gap: 0;
       width: 100%;
-      padding: 0.7rem 1rem;
-      font-size: 0.9rem;
-      font-weight: 600;
+      max-width: min(100%, 520px);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 6px 28px rgba(0, 0, 0, 0.55);
+    }
+    .geo-help__cta {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.85rem 0.75rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-align: center;
+      text-decoration: none;
+      color: #fff !important;
+      background: #0d7dd6;
       border: none;
-      border-radius: 10px;
       cursor: pointer;
       font-family: inherit;
+      line-height: 1.25;
+      -webkit-tap-highlight-color: transparent;
     }
-    .geo-help__primary {
-      background: #0d7dd6;
-      color: #fff;
+    .geo-help__cta:active {
+      filter: brightness(1.08);
     }
-    .geo-help__secondary {
-      background: #3a3a3a;
-      color: #e0e0e0;
+    .geo-help__cta--disabled {
+      background: #444;
+      color: #bbb !important;
+      pointer-events: none;
     }
-    .geo-help__note {
-      font-size: 0.78rem;
-      color: #888;
-      margin-top: 0.75rem !important;
+    .geo-help__retry {
+      flex: 0 0 3.1rem;
+      margin: 0;
+      padding: 0;
+      font-size: 1.35rem;
+      line-height: 1;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      color: #e8e8e8;
+      background: #333;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .geo-help__retry:active {
+      background: #444;
     }
   </style>
 </head>
@@ -126,30 +129,12 @@
     <div id="status" aria-live="polite" aria-hidden="true"></div>
   </figure>
 
-  <div id="geo-help" class="geo-help geo-help--hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="geo-help-title">
-    <div class="geo-help__box">
-      <h2 id="geo-help-title">Включите геолокацию на телефоне</h2>
-      <p id="geo-help-lead">
-        Сайту уже разрешили доступ в браузере, но координаты не приходят — чаще всего на устройстве
-        <strong>выключена служба «Местоположение» / GPS</strong> (так же, как подсказывают карты).
-      </p>
-      <p id="geo-help-ios" class="geo-help--hidden">
-        <b>iPhone / iPad:</b> «Настройки» → «Конфиденциальность и безопасность» → «Службы геолокации» — включите.
-        Ниже для Safari при необходимости откройте доступ к местоположению.
-      </p>
-      <p id="geo-help-android-hint" class="geo-help--hidden">
-        <b>Android:</b> «Настройки» → «Местоположение» (или «Геоданные») — включите и выберите режим
-        <strong>«Высокая точность»</strong> (GPS + сеть), затем вернитесь в браузер.
-      </p>
-      <div class="geo-help__actions">
-        <button type="button" class="geo-help__primary geo-help--hidden" id="geo-help-open-android">
-          Открыть настройки геолокации (Android)
-        </button>
-        <button type="button" class="geo-help__secondary" id="geo-help-retry">Проверить снова</button>
-      </div>
-      <p class="geo-help__note">
-        Сайт не может сам включить модуль GPS — только открыть экран настроек (Android) или подсказать путь. Это ограничение безопасности ОС.
-      </p>
+  <div id="geo-help" class="geo-help geo-help--hidden" aria-hidden="true" role="region" aria-label="Геолокация">
+    <div class="geo-help__bar">
+      <a id="geo-help-cta" class="geo-help__cta" href="#">Включите геолокацию</a>
+      <button type="button" class="geo-help__retry" id="geo-help-retry" aria-label="Проверить снова" title="Проверить снова">
+        ↻
+      </button>
     </div>
   </div>
 
@@ -169,70 +154,45 @@
         root.setAttribute("aria-hidden", "true");
       }
 
+      var ANDROID_LOC_INTENT =
+        "intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;end";
+
       function openGeoHelpPanel(code) {
         var root = document.getElementById("geo-help");
-        var title = document.getElementById("geo-help-title");
-        var lead = document.getElementById("geo-help-lead");
-        var iosBlk = document.getElementById("geo-help-ios");
-        var andHint = document.getElementById("geo-help-android-hint");
-        var andBtn = document.getElementById("geo-help-open-android");
+        var cta = document.getElementById("geo-help-cta");
         var isAndroid = /Android/i.test(navigator.userAgent || "");
-        var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
 
-        iosBlk.classList.add("geo-help--hidden");
-        andHint.classList.add("geo-help--hidden");
-        andBtn.classList.add("geo-help--hidden");
+        cta.onclick = null;
+        cta.classList.remove("geo-help__cta--disabled");
 
         if (code === 0) {
-          title.textContent = "Геолокация недоступна в этом браузере";
-          lead.textContent =
-            "API геолокации отсутствует или отключён (часто во встроенном браузере приложений). Откройте ссылку в Chrome, Samsung Internet или Safari.";
-          root.classList.remove("geo-help--hidden");
-          root.setAttribute("aria-hidden", "false");
-          return;
-        }
-
-        if (code === 1) {
-          title.textContent = "Местоположение: браузер и телефон";
-          lead.innerHTML =
-            "Сначала проверьте <strong>разрешение для этого сайта</strong> (замок / «i» в адресной строке). Если для сайта доступ уже включён, а координат нет — включите <strong>общую геолокацию в настройках телефона</strong> (кнопка ниже на Android).";
-          if (isIOS) {
-            iosBlk.classList.remove("geo-help--hidden");
-          }
-          if (isAndroid) {
-            andHint.innerHTML =
-              "<b>Chrome:</b> «⋮» → «Сведения о сайте» → «Разрешения» → «Местоположение» → разрешить.<br><br><b>Если здесь уже «Разрешено»:</b> нажмите синюю кнопку — откроются <strong>системные</strong> настройки GPS / «Местоположение», как в картах.";
-            andHint.classList.remove("geo-help--hidden");
-            andBtn.classList.remove("geo-help--hidden");
-          }
+          cta.textContent = "Включите геолокацию";
+          cta.setAttribute("href", "#");
+          cta.classList.add("geo-help__cta--disabled");
+          cta.onclick = function (e) {
+            e.preventDefault();
+          };
+        } else if (isAndroid) {
+          cta.textContent = "Включите геолокацию";
+          cta.setAttribute("href", ANDROID_LOC_INTENT);
+          /*
+           * Включить GPS скриптом нельзя (политика ОС). Сразу открываем экран настроек;
+           * если браузер блокирует без жеста — сработает повторное нажатие на ту же ссылку.
+           */
+          setTimeout(function () {
+            window.location.href = ANDROID_LOC_INTENT;
+          }, 80);
         } else {
-          title.textContent = "Включите геолокацию на телефоне";
-          lead.innerHTML =
-            "Координаты не приходят — чаще всего в шторке или в настройках выключена <strong>системная служба «Местоположение» / GPS</strong>. Нажмите кнопку ниже (Android) или включите службы вручную.";
-          if (isIOS) {
-            iosBlk.classList.remove("geo-help--hidden");
-          }
-          if (isAndroid) {
-            andHint.innerHTML =
-              "<b>Android:</b> «Настройки» → «Местоположение» / «Геоданные» — включите и режим <strong>«Высокая точность»</strong> (GPS + сеть). Либо нажмите кнопку ниже.";
-            andHint.classList.remove("geo-help--hidden");
-            andBtn.classList.remove("geo-help--hidden");
-          }
+          cta.textContent = "Включите геолокацию";
+          cta.setAttribute("href", "#");
+          cta.onclick = function (e) {
+            e.preventDefault();
+          };
         }
 
         root.classList.remove("geo-help--hidden");
         root.setAttribute("aria-hidden", "false");
       }
-
-      function tryOpenAndroidLocationSettings() {
-        var intents = [
-          "intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;end",
-          "intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;package=com.android.settings;end",
-        ];
-        window.location.href = intents[0];
-      }
-
-      document.getElementById("geo-help-open-android").addEventListener("click", tryOpenAndroidLocationSettings);
       document.getElementById("geo-help-retry").addEventListener("click", function () {
         closeGeoHelpPanel();
         started = false;
